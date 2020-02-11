@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+import nltk
+import spacy
+from nltk.stem.snowball import SnowballStemmer
+from textblob import TextBlob
+from sklearn.feature_extraction.text import TfidfVectorizer, TfidfTransformer
+import numpy as np
+import re
+import sys, io
+import ranking
+import copy
+from fuzzywuzzy import fuzz
+import answer_wh
+
+
+
+#change to large?
+en_nlp = spacy.load('en_core_web_sm')
+
+#parse = nltk.CoreNLPParser(url = "http://localhost:9000")
+wh_words = set(['why', 'which', 'whose', 'who', 'whom', 'where', 'when', 'what','how'])
+
+def q_type(questions):
+    res = []
+    for q in questions:
+        doc = en_nlp(q)
+        label = "OTHERS"
+        wh_word = None
+        for i in range(len(doc)):
+            w = doc[i].text.lower() 
+            if w in wh_words:
+                label = "WH"
+                if w == "how":
+                    if i+1<len(doc) and (doc[i+1]).text.lower() == "many":
+                        wh_word =  "how_many"
+                    else:
+                        wh_word =  "how"
+                    
+                elif w in ['who','whom']:
+                    wh_word = 'who'
+                else:
+                    wh_word = w
+
+                res.append((wh_word,doc[i+1:].text))
+                break
+            elif doc[i].lemma_.lower() in ['be','do','have']:
+                label = "BINARY"
+                wh_word = "BINARY"
+                res.append((wh_word, doc[i+1:].text))
+                break
+            else:
+                res.append((None, q))   
+    return res
+
+article_filename = sys.argv[1]
+questions_filename = sys.argv[2]
+
+with io.open(article_filename, 'r', encoding='utf8') as f:
+    text = f.read()
+with io.open(questions_filename, 'r', encoding='utf8') as f:
+    questions = f.read()
+    questions = questions.split('\n')
+
+text = text.split('\n')
+text = list(filter(lambda x: len(x.split()) >3,text))
+
+text = ' '.join(text)
+blob = TextBlob(text)
+sentences = [item.raw for item in blob.sentences]
+
+#process questions
+res = q_type(questions)
+fuzzy_lst = []
+wh_q_lst = []
+labels = []
+processed_q_lst = []
+for (wh_word, binary_form) in res:
+    if wh_word == "BINARY" or wh_word == "OTHERS":
+        fuzzy_lst.append(binary_form)
+    else:
+        wh_q_lst.append(binary_form)
+    processed_q_lst.append(binary_form)
+    labels.append(wh_word)
+
+
+# get the best guess sentence
+fuzzy_ans = []
+predictions = ranking.fuzzyCompare(sentences,fuzzy_lst)
+threshold = 89
+for (best_sentence, score) in predictions:
+    if score< threshold:
+        fuzzy_ans.append("No.")
+    else:
+        fuzzy_ans.append("Yes.")
+
+wh_guess = []
+ind = ranking.ranking(sentences,wh_q_lst)
+for i in ind:
+    wh_guess.append(sentences[i])
+######################
+
+
+#combine all candidates
+ind_wh = 0
+ind_binary = 0
+candidates= []
+for lab in labels:
+    if lab != "BINARY" and lab != "OTHERS":
+        candidates.append(wh_guess[ind_wh])
+        ind_wh +=1
+    else:
+        candidates.append(fuzzy_ans[ind_binary])
+        ind_binary+=1
+
+#################
+anser_lst = []
+for i in range(len(labels)):
+    wh_word = labels[i]
+    if wh_word != "BINARY" and wh_word != "OTHERS":
+        wh_question = getattr(answer_wh, 'answer_' + wh_word)
+        a = wh_question(processed_q_lst[i], candidates[i])
+        anser_lst.append(a)
+    else:
+        anser_lst.append(candidates[i])
+
+
+final_ans = ''
+for ans in anser_lst:
+    final_ans+=ans +'\n'
+
+print(final_ans)
+
+
+
+'''
+#if not using the answer_wh:
+count_binary = 0
+count_wh = 0
+final_ans = ''
+for lab in labels:
+    if lab == "BINARY" or lab == "OTHERS":
+        final_ans += fuzzy_ans[count_binary]+'\n'
+        count_binary+=1
+    else:
+        final_ans += wh_guess[count_wh] + '\n'
+        count_wh+=1
+print(final_ans)
+'''

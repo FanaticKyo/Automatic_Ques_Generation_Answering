@@ -1,0 +1,330 @@
+#!/usr/bin/env python3
+
+# aux binary question
+# aux binary question
+def aux_binary(sentence):  
+    if len(sentence) < 30 and len(sentence) > 5:
+        subj_idx = None
+        question = None
+        v_idx = None
+        for idx, token in enumerate(sentence):
+            if token.dep_ == 'ROOT':
+                v_idx = idx
+        if v_idx is not None:
+            for idx, token in enumerate(sentence[:v_idx]):
+                if (token.dep_ == 'nsubj' or token.dep_ == 'nsubjpass') and (token.tag_[:2] == 'NN'):
+                    subj_idx = idx
+                    span = sentence[sentence[subj_idx].left_edge.i : sentence[subj_idx].right_edge.i+1]
+                    with sentence.retokenize() as retokenizer:
+                        retokenizer.merge(span)
+                        break
+        for idx, token in enumerate(sentence):
+            if token.dep_ == 'ROOT':
+                v_idx = idx
+        for idx, token in enumerate(sentence[:v_idx]):
+            if (token.dep_ == 'nsubj' or token.dep_ == 'nsubjpass') and (token.tag_[:2] == 'NN'):
+                    subj_idx = idx
+            if token.pos_ == "AUX" and token.dep_ == 'aux' and subj_idx is not None:
+                if sentence[subj_idx].ent_type_ != '':
+                    question = str(token).capitalize().strip() + " " + str(sentence[subj_idx]).strip() + " " + str(sentence[idx+1:]).strip() +"?"
+                else: 
+                    question = str(token).capitalize().strip() + " " + str(sentence[subj_idx]).strip().lower() + " " + str(sentence[idx+1:]).strip() +"?"
+                question = question.replace(' not', '')
+        if subj_idx is not None and question is None and v_idx+1 < len(sentence) and sentence[v_idx].pos_ == 'AUX':
+            if sentence[subj_idx].ent_type_ != '':
+                question = str(sentence[v_idx]).capitalize() + " " + str(sentence[subj_idx]).strip() + " " + str(sentence[v_idx+1:]).strip() +"?"
+            else:
+                question = str(sentence[v_idx]).capitalize() + " " + str(sentence[subj_idx]).strip().lower() + " " + str(sentence[v_idx+1:]).strip() +"?"
+            question = question.replace(' not', '')
+        if subj_idx is not None:
+            return question      
+
+
+# get vb binary question
+def vb_binary(sentence):
+    if len(sentence) < 30 and len(sentence) > 5:
+        subj_idx = None
+        question = None
+        v_idx = None
+        for idx, token in enumerate(sentence):
+            if token.dep_ == 'ROOT':
+                v_idx = idx
+        if v_idx is not None:
+            for idx, token in enumerate(sentence[:v_idx+1]):
+                if (token.dep_ == 'nsubj' or token.dep_ == 'nsubjpass') and (token.tag_[:2] == 'NN'):
+                    subj_idx = idx
+                    com_count = 0
+                    for i in range(1,5):
+                        com_subj = sentence[subj_idx-i]
+                        if (com_subj.tag_[:2] == 'NN' and com_subj.dep_ == 'compound') or (com_subj.dep_ == 'nummod') or (com_subj.tag_ == 'HYPH'):
+                            com_count = i
+                        else:
+                            break
+
+                if token.tag_ == "VBP" and token.pos_ == 'VERB' and subj_idx is not None:
+                    if sentence[subj_idx-com_count].ent_type_ != '':
+                        return "Do" + " " + str(sentence[subj_idx-com_count:subj_idx+1]).strip() + " " + str(sentence[idx:]) + "?"
+                    else:
+                        return "Do" + " " + str(sentence[subj_idx-com_count]).strip().lower() + str(sentence[subj_idx-com_count+1:subj_idx+1]).strip() + " " + str(sentence[idx:]) + "?"
+                elif token.tag_ == "VBD" and token.pos_ == 'VERB' and subj_idx is not None:
+                    if sentence[subj_idx-com_count].ent_type_ != '':
+                        question =  "Did" + " " + str(sentence[subj_idx-com_count:subj_idx+1]).strip() + " " + str(sentence[idx:])
+                    else:
+                        question =  "Did" + " " + str(sentence[subj_idx-com_count]).strip().lower() + " "+ str(sentence[subj_idx-com_count+1:subj_idx+1]).strip() + " " + str(sentence[idx:])
+                    for idx, token in enumerate(sentence):
+                        if token.tag_ == "VBD" and token.pos_ == 'VERB':
+                            question = question.replace(str(token), str(token.lemma_))
+
+                    return question+'?'
+                elif token.tag_ == "VBZ" and token.pos_ == 'VERB' and subj_idx is not None:
+                    if sentence[subj_idx-com_count].ent_type_ != '':
+                        question =  "Does" + " " + str(sentence[subj_idx-com_count:subj_idx+1]).strip() + " " + str(sentence[idx:])
+                    else:
+                        question =  "Does" + " " + str(sentence[subj_idx-com_count]).strip().lower() +" "+ str(sentence[subj_idx-com_count+1:subj_idx+1]).strip() + " " + str(sentence[idx:])
+                    for idx, token in enumerate(sentence):
+                        if token.tag_ == "VBZ" and token.pos_ == 'VERB':
+                            question = question.replace(str(token), str(token.lemma_))
+                    return question+'?'
+
+# get what & who question
+def get_what_who_subj_question(nlp_sent):
+    if len(nlp_sent) < 50 and len(nlp_sent) > 5:
+        subj_idx = None
+        question_word = None
+        v_idx = None
+        for idx, token in enumerate(nlp_sent):
+            if token.dep_ == 'ROOT':
+                v_idx = idx
+        if v_idx is not None:
+            for idx, token in enumerate(nlp_sent[:v_idx]):
+                if (token.dep_ == 'nsubj' or token.dep_ == 'nsubjpass'):
+                    subj_idx = idx
+                    com_count = 0
+                    for i in range(1,5):
+                        com_subj = nlp_sent[subj_idx-i]
+                        if com_subj.dep_ == 'compound':
+                            com_count = i
+                        else:
+                            break
+                    for idx, token in enumerate(nlp_sent[subj_idx-com_count:subj_idx+1]):
+                        if token.ent_type_ == 'ORG':
+                            question_word = 'What '
+                        if token.ent_type_ == 'PERSON':
+                            question_word = 'Who '
+        if subj_idx is not None and question_word is not None:
+            if nlp_sent[subj_idx+1].ent_type_ != '':
+                question = question_word + str(nlp_sent[subj_idx+1]) + " " + str(nlp_sent[subj_idx+2:]) + '?'
+            else: 
+                question = question_word + str(nlp_sent[subj_idx+1]).lower() + " " + str(nlp_sent[subj_idx+2:]) + '?'
+            if len(question.split(' ')) > 5 and len(question.split(' ')) < 30:
+                return question
+
+# get where question
+def get_where_question(sentence):
+    if len(sentence) < 20 and len(sentence) > 5:
+        subj_idx = None
+        question = None
+        ent_start = None
+        ent_end = None
+        verb_type = None
+        verb = None
+        prep_list = ['in', 'on', 'at', 'from', 'to']
+        for ent in sentence.ents:
+            if (ent.label_ == 'ORG' or ent.label_ == 'GPE' or ent.label_ == 'LOC') and (str(sentence[ent.start - 1]) in prep_list):
+                ent_start = ent.start
+                ent_end = ent.end
+        for idx, token in enumerate(sentence):
+            if (token.dep_ == 'nsubj' or token.dep_ == 'nsubjpass') and (token.tag_[:2] == 'NN'):
+                subj_idx = idx
+                com_count = 0
+                for i in range(1,5):
+                    com_subj = sentence[subj_idx-i]
+                    if com_subj.tag_[:2] == 'NN' and com_subj.dep_ == 'compound':
+                        com_count = i
+                    else:
+                        break
+            if token.tag_ == 'VBD' and token.dep_ == 'ROOT':
+                verb_type = 'VBD'
+                verb = token
+            elif token.tag_ == 'VBZ' and token.dep_ == 'ROOT':
+                verb_type = 'VBZ'
+                verb = token
+            elif token.tag_ == 'VBP' and token.dep_ == 'ROOT':
+                verb_type = 'VBP'
+                verb = token
+        if ent_start is not None and verb_type is not None and subj_idx is not None:
+            if sentence[subj_idx-com_count].ent_type_ != '':
+                sub_question = str(sentence[subj_idx-com_count:subj_idx+1]).strip() + ' ' + str(sentence[subj_idx+1:ent_start-1]).strip() + ' ' + str(sentence[ent_end:]).strip() + '?'
+            else: 
+                sub_question = str(sentence[subj_idx-com_count]).strip().lower() + " "+ str(sentence[subj_idx-com_count+1:subj_idx+1]).strip() + ' ' + str(sentence[subj_idx+1:ent_start-1]).strip() + ' ' + str(sentence[ent_end:]).strip() + '?'
+            if verb_type == 'VBD':
+                question = 'Where did ' + ' ' + sub_question
+            elif verb_type == 'VBZ':
+                question = 'Where does ' + ' ' + sub_question
+            elif verb_type == 'VBP':
+                question = 'Where do ' + ' ' + sub_question
+                
+            question = question.replace(str(verb), str(verb.lemma_))
+            return question
+
+def get_why_question(sentence):
+    if len(sentence) < 50 and len(sentence) > 5 and "because" in str(sentence):
+        subj_idx = None
+        verb_type = None
+        verb = None
+        question = None       
+        because_index = None
+        nn_idx = None
+        for idx, token in enumerate(sentence):
+            if str(token) == "because" and str(sentence[idx-1]) != '(':
+                because_index = idx
+                nn_idx = because_index - 1
+        for idx, token in enumerate(sentence[:because_index]):
+            if str(token) == ',':
+                nn_idx = idx - 1
+        if because_index is not None and nn_idx != because_index - 1:
+            start_idx = nn_idx
+            for idx, token in enumerate(sentence[nn_idx:because_index]):
+                if token.is_stop is False:
+                    nn_idx = idx + start_idx
+        for idx, token in enumerate(sentence):
+            #if (token.dep_ == 'nsubj' or token.dep_ == 'nsubjpass') and (token.tag_ == 'NNP'):
+            if (token.dep_ == 'nsubj' or token.dep_ == 'nsubjpass') and because_index is not None and idx < because_index :
+                subj_idx = idx
+                com_count = 0
+                for i in range(1,5):
+                    com_subj = sentence[subj_idx-i]
+                    if (com_subj.tag_ == 'NNP'or com_subj.tag_ == 'NN') and com_subj.dep_ == 'compound':
+                        com_count = i
+                    else:
+                        break
+            if token.pos_ =='VERB' and token.tag_ == 'VBD' and token.dep_ == 'ROOT':
+                verb_type = 'VBD'
+                verb = token
+            elif token.pos_ =='VERB' and token.tag_ == 'VBZ' and token.dep_ == 'ROOT':
+                verb_type = 'VBZ'
+                verb = token
+            elif token.pos_ =='VERB' and token.tag_ == 'VBP' and token.dep_ == 'ROOT':
+                verb_type = 'VBP'
+                verb = token
+                
+            if verb_type is not None and subj_idx is not None:
+                if sentence[subj_idx-com_count].ent_type_ != '':
+                    sub_question = str(sentence[subj_idx-com_count:subj_idx+1]).strip() + ' ' + str(sentence[subj_idx+1:nn_idx+1]).strip() + '?'
+                else: 
+                    sub_question = str(sentence[subj_idx-com_count]).strip().lower() + " " + str(sentence[subj_idx-com_count+1:subj_idx+1]).strip() + ' ' + str(sentence[subj_idx+1:nn_idx+1]).strip() + '?'
+                if verb_type == 'VBD':
+                    question = 'Why did' + ' ' + sub_question
+                elif verb_type == 'VBZ':
+                    question = 'Why does' + ' ' + sub_question
+                elif verb_type == 'VBP':
+                    question = 'Why do' + ' ' + sub_question
+                
+                question = question.replace(str(verb), str(verb.lemma_))
+                if question[-2] == ',':
+                    question = question[:-2] + question[-1]
+
+                return question       
+
+
+
+import sys
+import spacy
+import neuralcoref
+from utils import *
+import lm
+
+training_doc = []
+for i in range(1, 3):
+    path = './set' + str(i) + '/a'
+    for j in range(1, 11):
+        sub_path = path + str(j) + '.txt'
+        with open(sub_path) as f:
+            document = f.read().splitlines()
+            training_doc.extend(document)
+
+processed_text = preprocess(training_doc)
+
+trigram = lm.LanguageModel(processed_text, ngram=3, min_freq=5)
+
+nlp = spacy.load('en_core_web_lg')
+neuralcoref.add_to_pipe(nlp)
+
+if len(sys.argv) != 3:
+    print("Usage: python ask.py article.txt nquestions")
+    sys.exit(1)
+
+DOCUMENT = sys.argv[1]
+NUM_QUESTIONS = sys.argv[2]
+
+with open(DOCUMENT) as f:
+    document = f.read().splitlines() 
+
+question_list = []
+for paragraph in document:
+    if len(paragraph) > 5:
+        paragraph = nlp(paragraph)
+        coref_text = paragraph._.coref_resolved
+        doc_list = coref_text.split('. ')
+        doc_list[-1] = doc_list[-1].strip('.')
+        for doc in doc_list:
+            if '(' in doc or ')' in doc:
+                pass
+            else:
+                doc = nlp(doc)
+                b_aux_question = aux_binary(doc)
+                if b_aux_question is not None:
+#                     question_list.append(str(doc))
+                    question_list.append(b_aux_question)
+                b_vb_question = vb_binary(doc)
+                if b_vb_question is not None:
+#                     question_list.append(str(doc))
+                    question_list.append(b_vb_question)
+                what_who_question = get_what_who_subj_question(doc)
+                if what_who_question is not None:
+#                     question_list.append(str(doc))
+                    question_list.append(what_who_question)
+                where_question = get_where_question(doc)
+                if where_question is not None:
+#                     question_list.append(str(doc))
+                    question_list.append(where_question)
+                why_question = get_why_question(doc)
+                if why_question is not None:
+#                     question_list.append(str(doc))
+                    question_list.append(why_question)
+
+perplexity_dict = {}
+for idx, ques in enumerate(question_list):
+    test = lm.preprocess([ques])
+    perplexity_dict[idx] = lm.calculate_perplexity(models=[trigram], coefs=[0,0,0,1], data=test)
+
+final_order = sorted(perplexity_dict, key=perplexity_dict.get)
+
+for idx, ques in enumerate(question_list):
+    tokens = ques.split(' ')
+    new_tokens = []
+    for t in tokens:
+        t = t.strip()
+        new_tokens.append(t)
+    new_ques = ''
+    for nt in new_tokens:
+        if nt != '':
+            new_ques += (nt + ' ')
+    question_list[idx] = new_ques.strip()
+
+new_order = []
+for idx, _ in enumerate(question_list):
+    if len(question_list[final_order[idx]].split(' ')) < 6:
+        pass
+    elif question_list[final_order[idx]].startswith("Why "):
+        new_order.insert(0, question_list[final_order[idx]])
+    else:
+        new_order.append(question_list[final_order[idx]])
+
+# sys.stderr = original_stdout  # turn STDOUT back on
+new_order *= 100
+output_str = ""
+for ques in new_order[:int(NUM_QUESTIONS)]:
+    output_str += ques
+    output_str += '\n'
+print(output_str)
