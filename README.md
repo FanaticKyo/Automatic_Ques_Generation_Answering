@@ -2,7 +2,7 @@
 
 1.Question generation
 
-The ask program have the following command-line interface:
+The ask program has the following command-line interface:
 
 ./ask article.txt nquestions
 
@@ -12,7 +12,7 @@ article.txt is a path to an arbitrary plain text file (the document) nquestions 
 
 2.Question answering
 
-The answer program have the following command-line interface:
+The answer program has the following command-line interface:
 
 ./answer article.txt questions.txt
 
